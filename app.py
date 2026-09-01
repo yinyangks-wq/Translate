@@ -11,7 +11,7 @@ st.set_page_config(
 st.markdown("### 📱 Mobile Recap & Voice Tool")
 
 
-# Async function for Edge-TTS (GitHub မှာ ချောမွေ့စွာ run နိုင်ရန်)
+# Async function for Edge-TTS
 async def generate_edge_audio(text, voice_name):
   communicate = edge_tts.Communicate(text, voice_name)
   audio_buffer = io.BytesIO()
@@ -22,22 +22,24 @@ async def generate_edge_audio(text, voice_name):
   return audio_buffer.read()
 
 
-# Sidebar - Voice Selection (Mobile မှာ menu ကနေ ဝင်ရလို့ သန့်ရှင်းပါတယ်)
+# Sidebar - Voice Selection (Error မတက်စေရန် string ဖြင့် သေချာပြင်ဆင်ထားပါသည်)
 with st.sidebar:
   st.markdown("### ⚙️ ဆက်တင်များ (Settings)")
   voice_choice = st.selectbox(
       "အသံအမျိုးအစား (Voice Type)",
-      options=[
-          ("my-MM-NilarNeural", "👩 အမျိုးသမီးအသံ (Nilar - Natural)"),
-          ("my-MM-ThuraNeural", "👨 အမျိုးသားအသံ (Thura - Natural)"),
-      ],
-      format_func=lambda x: x[1],
+      options=["my-MM-NilarNeural", "my-MM-ThuraNeural"],
+      format_func=lambda x: (
+          "👩 အမျိုးသမီးအသံ (Nilar)"
+          if x == "my-MM-NilarNeural"
+          else "👨 အမျိုးသားအသံ (Thura)"
+      ),
   )
+
   recap_length = st.selectbox(
       "အကျဉ်းချုပ် ပုံစံ", ["အတိုစား (Short)", "အရှည် (Detailed)"]
   )
 
-# Main Form (ဖုန်းမှာ Input တွေ ရှုပ်မသွားအောင် Form နဲ့ သုံးထားပါတယ်)
+# Main Form
 with st.form(key="recap_form"):
   user_text = st.text_area(
       "အကျဉ်းချုပ်လိုသော စာသားများကို ထည့်ပါ:",
@@ -54,10 +56,10 @@ if submit_btn:
     st.warning("ကျေးဇူးပြု၍ စာသားအနည်းငယ် ထည့်ပေးပါ။")
   else:
     with st.spinner("အကျဉ်းချုပ်နှင့် အသံဖိုင် ဖန်တီးနေသည်... ခဏစောင့်ပါ..."):
-      # ဤနေရာတွင် AI Recap logic ထည့်နိုင်ပါသည်။ (ယခု ဥပမာအနေဖြင့် ထည့်ထားသော စာသားကို ပြထားပါသည်)
+      # Recap Logic
       recap_result = f"ရရှိလာသော အကျဉ်းချုပ် ({recap_length}):\n\n{user_text}"
 
-      # Session State ထဲမှာ သိမ်းဆည်းခြင်း (Refresh ဖြစ်တဲ့အခါ ပျောက်မသွားရန်)
+      # Session State ထဲမှာ သိမ်းဆည်းခြင်း
       st.session_state["recap_result"] = recap_result
 
       # Edge-TTS ဖြင့် အသံဖိုင်ထုတ်ယူခြင်း
