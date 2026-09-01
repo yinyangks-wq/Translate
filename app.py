@@ -1,9 +1,8 @@
-import asyncio
 import io
 import edge_tts
 import streamlit as st
 
-# Page Configuration (Mobile-friendly layout)
+# Page Configuration
 st.set_page_config(
     page_title="Mobile Recap & Voice Tool", page_icon="🎙️", layout="centered"
 )
@@ -11,18 +10,29 @@ st.set_page_config(
 st.markdown("### 📱 Mobile Recap & Voice Tool")
 
 
-# Async function for Edge-TTS
-async def generate_edge_audio(text, voice_name):
-  communicate = edge_tts.Communicate(text, voice_name)
-  audio_buffer = io.BytesIO()
-  async for chunk in communicate.stream():
-    if chunk["type"] == "audio":
-      audio_buffer.write(chunk["data"])
-  audio_buffer.seek(0)
-  return audio_buffer.read()
+# Edge-TTS အတွက် Error ကင်းရှင်းစေမည့် Synchronous Helper Function
+def get_edge_audio_bytes(text, voice_name):
+  async def _generate():
+    communicate = edge_tts.Communicate(text, voice_name)
+    audio_buffer = io.BytesIO()
+    async for chunk in communicate.stream():
+      if chunk["type"] == "audio":
+        audio_buffer.write(chunk["data"])
+    audio_buffer.seek(0)
+    return audio_buffer.read()
+
+  import asyncio
+
+  try:
+    return asyncio.run(_generate())
+  except RuntimeError:
+    # Streamlit Cloud ကဲ့သို့ environment များတွင် event loop ပြဿနာမရှိစေရန်
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop.run_until_complete(_generate())
 
 
-# Sidebar - Voice Selection (Error မတက်စေရန် string ဖြင့် သေချာပြင်ဆင်ထားပါသည်)
+# Sidebar - Voice Selection
 with st.sidebar:
   st.markdown("### ⚙️ ဆက်တင်များ (Settings)")
   voice_choice = st.selectbox(
@@ -58,17 +68,11 @@ if submit_btn:
     with st.spinner("အကျဉ်းချုပ်နှင့် အသံဖိုင် ဖန်တီးနေသည်... ခဏစောင့်ပါ..."):
       # Recap Logic
       recap_result = f"ရရှိလာသော အကျဉ်းချုပ် ({recap_length}):\n\n{user_text}"
-
-      # Session State ထဲမှာ သိမ်းဆည်းခြင်း
       st.session_state["recap_result"] = recap_result
 
       # Edge-TTS ဖြင့် အသံဖိုင်ထုတ်ယူခြင်း
       try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        audio_bytes = loop.run_until_complete(
-            generate_edge_audio(recap_result, voice_choice)
-        )
+        audio_bytes = get_edge_audio_bytes(recap_result, voice_choice)
         st.session_state["audio_bytes"] = audio_bytes
       except Exception as e:
         st.error(f"အသံဖိုင် ထုတ်ယူရာတွင် အမှားရှိပါသည်: {e}")
