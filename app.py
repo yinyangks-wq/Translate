@@ -6,10 +6,10 @@ import streamlit as st
 
 # Page Configuration
 st.set_page_config(
-    page_title="Video Auto Recap & Voice Tool", page_icon="🎥", layout="centered"
+    page_title="Large Video Auto Recap & Voice", page_icon="🎥", layout="centered"
 )
 
-st.markdown("### 🎥 Video to Myanmar Auto Recap & Voice")
+st.markdown("### 🎥 Large Video to Myanmar Auto Recap & Voice")
 
 # Sidebar - API Key and Settings
 with st.sidebar:
@@ -18,10 +18,7 @@ with st.sidebar:
       "Gemini API Key ထည့်ပါ",
       type="password",
       placeholder="AIzaSy...",
-      help=(
-          "Google AI Studio မှ ရယူထားသော API Key ကို ဤနေရာတွင် ထည့်ပါ"
-          " (သို့မဟုတ် st.secrets တွင် သုံးပါ)"
-      ),
+      help="Google AI Studio မှ ရယူထားသော API Key ကို ထည့်ပါ။",
   )
 
   voice_choice = st.selectbox(
@@ -66,9 +63,10 @@ def get_edge_audio_bytes(text, voice_name):
 
 
 # Main UI - Video Uploader Form
-with st.form(key="video_recap_form"):
+with st.form(key="large_video_form"):
   uploaded_video = st.file_uploader(
-      "ဗီဒီယိုဖိုင် တင်ပါ (MP4, MOV, AVI)", type=["mp4", "mov", "avi", "mkv"]
+      "ဗီဒီယိုဖိုင် တင်ပါ (ဖိုင်ဆိုဒ် ကြီးလည်းရ습니다)",
+      type=["mp4", "mov", "avi", "mkv", "webm"],
   )
   submit_btn = st.form_submit_button(
       label="✨ ဗီဒီယိုကို မြန်မာလို Recap လုပ်မည်", use_container_width=True
@@ -84,7 +82,7 @@ if submit_btn:
     st.warning("ကျေးဇူးပြု၍ ဗီဒီယိုဖိုင် တစ်ခု တင်ပေးပါ။")
   else:
     with st.spinner(
-        "ဗီဒီယိုကို AI ဖြင့် ဖတ်ရှုနေသည်... (ခဏစောင့်ပါ)..."
+        "ဗီဒီယိုဖိုင် ကြီးမားသဖြင့် AI ထံသို့ တင်ဆောင်နေသည်... (ခဏစောင့်ပါ)..."
     ):
       try:
         # Streamlit uploaded file ကို Temporary file အဖြစ် သိမ်းဆည်းခြင်း
@@ -97,15 +95,17 @@ if submit_btn:
         # Google GenAI Client ကို ချိတ်ဆက်ခြင်း
         client = genai.Client(api_key=api_key)
 
-        # Gemini ဖြင့် ဗီဒီယိုဖိုင်ကို Upload တင်ခြင်း
-        st.info("ဗီဒီယိုကို Google ဆာဗာသို့ တင်နေပါပြီ...")
+        # Files API ကို အသုံးပြု၍ ကြီးမားသော ဗီဒီယိုများကို တင်ခြင်း
+        st.info(
+            "ဗီဒီယိုကို Google Files API သို့ ပေးပို့နေပါပြီ (ဖိုင်ဆိုဒ်ပေါ်မူတည်၍"
+            " အနည်းငယ် ကြာနိုင်ပါသည်)..."
+        )
         video_file = client.files.upload(file=tmp_file_path)
 
-        # Gemini API သုံးပြီး ဗီဒီယိုကို မြန်မာလို Recap လုပ်ခိုင်းခြင်း
+        # Gemini API သုံးပြီး မြန်မာလို Recap လုပ်ခိုင်းခြင်း
         prompt = (
-            f"ဤဗီဒီယိုပါ အကြောင်းအရာများကို လေ့လာပြီး မြန်မာဘာသာဖြင့်"
-            f" {recap_style} ပုံစံဖြင့် အကျဉ်းချုပ် ရေးသားပေးပါ။ အခြားဘာသာစကားများ"
-            " မရောပါစေနဲ့။"
+            f"ဤဗီဒီယိုပါ အကြောင်းအရာများကို အစအဆုံး လေ့လာပြီး မြန်မာဘာသာဖြင့်"
+            f" {recap_style} ပုံစံဖြင့် အကျဉ်းချုပ် ရေးသားပေးပါ။"
         )
 
         response = client.models.generate_content(
@@ -115,11 +115,11 @@ if submit_btn:
         recap_result = response.text
         st.session_state["recap_result"] = recap_result
 
-        # ထွက်လာတဲ့ မြန်မာစာသားကို အသံဖိုင်ပြောင်းခြင်း
+        # အသံဖိုင်ပြောင်းခြင်း
         audio_bytes = get_edge_audio_bytes(recap_result, voice_choice)
         st.session_state["audio_bytes"] = audio_bytes
 
-        # အသုံးပြုပြီးသော ဖိုင်ကို ဖျက်ဆီးခြင်း
+        # အသုံးပြုပြီးသော ဖိုင်ကို ဆာဗာပေါ်မှ ဖယ်ရှားခြင်း
         client.files.delete(name=video_file.name)
 
       except Exception as e:
