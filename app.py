@@ -62,7 +62,7 @@ def get_edge_audio_bytes(text, voice_name):
     return loop.run_until_complete(_generate())
 
 
-# Main UI - Video Uploader Form (max_upload_size ကို 5GB အထိ တိုးမြှင့်ထားသည်)
+# Main UI - Video Uploader Form
 with st.form(key="large_video_form"):
   uploaded_video = st.file_uploader(
       "ဗီဒီယိုဖိုင် တင်ပါ (5GB အထိ ရပါသည်)",
@@ -105,8 +105,9 @@ if submit_btn:
             f" {recap_style} ပုံစံဖြင့် အကျဉ်းချုပ် ရေးသားပေးပါ။"
         )
 
+        # မော်ဒယ်အမည်ကို Error ညွှန်ကြားချက်အတိုင်း ပြင်ဆင်ထားပါသည်
         response = client.models.generate_content(
-            model="gemini-2.5-flash", contents=[video_file, prompt]
+            model="gemini-2.5", contents=[video_file, prompt]
         )
 
         recap_result = response.text
