@@ -1,60 +1,91 @@
-import streamlit as st
-import edge_tts
 import asyncio
-import os
+import io
+import edge_tts
+import streamlit as st
 
-# Page Configuration
+# Page Configuration (Mobile-friendly layout)
 st.set_page_config(
-    page_title="🎙️ Edge TTS Myanmar Voice Generator",
-    page_icon="🔊",
-    layout="centered"
+    page_title="Mobile Recap & Voice Tool", page_icon="🎙️", layout="centered"
 )
 
-st.title("🎙️ Edge TTS Myanmar Voice Generator")
-st.write("စာသားများကို ထည့်သွင်းရုံဖြင့် Microsoft Edge ၏ အခမဲ့ AI အသံများဖြင့် အမျိုးသား/အမျိုးသမီး အသံအမျိုးမျိုး ပြောင်းလဲထုတ်လုပ်နိုင်ပါသည်။ (API Key လုံးဝ မလိုပါ)")
+st.markdown("### 📱 Mobile Recap & Voice Tool")
 
-# Text Input
-input_text = st.text_area("ပြောင်းလဲလိုသော စာသားများကို ဤနေရာတွင် ရိုက်ထည့်ပါ (သို့မဟုတ်) ကူးထည့်ပါ:", height=200)
 
-# 🗣️ Edge TTS ၏ မြန်မာဘာသာစကားအတွက် အသံအမျိုးမျိုး (Voices)
-voice_options = {
-    "Thiha (အမျိုးသားအသံ - မြန်မာ)": "my-MM-ThihaNeural",
-    "Nilar (အမျိုးသမီးအသံ - မြန်မာ)": "my-MM-NilarNeural"
-}
+# Async function for Edge-TTS (GitHub မှာ ချောမွေ့စွာ run နိုင်ရန်)
+async def generate_edge_audio(text, voice_name):
+  communicate = edge_tts.Communicate(text, voice_name)
+  audio_buffer = io.BytesIO()
+  async for chunk in communicate.stream():
+    if chunk["type"] == "audio":
+      audio_buffer.write(chunk["data"])
+  audio_buffer.seek(0)
+  return audio_buffer.read()
 
-selected_voice_name = st.selectbox("ကြိုက်နှစ်သက်ရာ အသံပုံစံကို ရွေးပါ:", list(voice_options.keys()))
-selected_voice = voice_options[selected_voice_name]
 
-# Async function to generate audio using edge_tts
-async def generate_edge_tts(text, voice, output_file):
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(output_file)
+# Sidebar - Voice Selection (Mobile မှာ menu ကနေ ဝင်ရလို့ သန့်ရှင်းပါတယ်)
+with st.sidebar:
+  st.markdown("### ⚙️ ဆက်တင်များ (Settings)")
+  voice_choice = st.selectbox(
+      "အသံအမျိုးအစား (Voice Type)",
+      options=[
+          ("my-MM-NilarNeural", "👩 အမျိုးသမီးအသံ (Nilar - Natural)"),
+          ("my-MM-ThuraNeural", "👨 အမျိုးသားအသံ (Thura - Natural)"),
+      ],
+      format_func=lambda x: x[1],
+  )
+  recap_length = st.selectbox(
+      "အကျဉ်းချုပ် ပုံစံ", ["အတိုစား (Short)", "အရှည် (Detailed)"]
+  )
 
-if st.button("🚀 အသံဖိုင်သို့ ပြောင်းမည်"):
-    if not input_text.strip():
-        st.warning("ကျေးဇူးပြု၍ ပြောင်းလဲလိုသော စာသားများကို ထည့်သွင်းပေးပါ။")
-    else:
-        output_file = "edge_output.mp3"
-        
-        with st.spinner("Microsoft Edge TTS ဖြင့် အသံဖိုင် ထုတ်လုပ်နေပါပြီ... ခေတ္တစောင့်ဆိုင်းပေးပါ..."):
-            try:
-                # Run async function in Streamlit
-                asyncio.run(generate_edge_tts(input_text, selected_voice, output_file))
+# Main Form (ဖုန်းမှာ Input တွေ ရှုပ်မသွားအောင် Form နဲ့ သုံးထားပါတယ်)
+with st.form(key="recap_form"):
+  user_text = st.text_area(
+      "အကျဉ်းချုပ်လိုသော စာသားများကို ထည့်ပါ:",
+      height=150,
+      placeholder="ဆောင်းပါး သို့မဟုတ် စာသားရှည်များ ဤနေရာတွင် ကူးထည့်ပါ...",
+  )
+  submit_btn = st.form_submit_button(
+      label="✨ Recap ပြုလုပ်ပြီး အသံဖိုင်ထုတ်မည်", use_container_width=True
+  )
 
-                st.success("🎉 အသံဖိုင် အောင်မြင်စွာ ထွက်ရှိလာပါပြီ။")
-                
-                # Play Audio in Streamlit
-                st.audio(output_file, format="audio/mp3")
+# Processing Logic
+if submit_btn:
+  if not user_text.strip():
+    st.warning("ကျေးဇူးပြု၍ စာသားအနည်းငယ် ထည့်ပေးပါ။")
+  else:
+    with st.spinner("အကျဉ်းချုပ်နှင့် အသံဖိုင် ဖန်တီးနေသည်... ခဏစောင့်ပါ..."):
+      # ဤနေရာတွင် AI Recap logic ထည့်နိုင်ပါသည်။ (ယခု ဥပမာအနေဖြင့် ထည့်ထားသော စာသားကို ပြထားပါသည်)
+      recap_result = f"ရရှိလာသော အကျဉ်းချုပ် ({recap_length}):\n\n{user_text}"
 
-                # Download Audio Button
-                with open(output_file, "rb") as f:
-                    audio_bytes = f.read()
-                    st.download_button(
-                        label="📥 အသံဖိုင် (.mp3) ကို ဒေါင်းလုဒ်လုပ်ရန်",
-                        data=audio_bytes,
-                        file_name="edge_myanmar_voice.mp3",
-                        mime="audio/mpeg"
-                    )
+      # Session State ထဲမှာ သိမ်းဆည်းခြင်း (Refresh ဖြစ်တဲ့အခါ ပျောက်မသွားရန်)
+      st.session_state["recap_result"] = recap_result
 
-            except Exception as e:
-                st.error(f"အမှားအယွင်း ဖြစ်ပွားသွားပါသည်: {e}")
+      # Edge-TTS ဖြင့် အသံဖိုင်ထုတ်ယူခြင်း
+      try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        audio_bytes = loop.run_until_complete(
+            generate_edge_audio(recap_result, voice_choice)
+        )
+        st.session_state["audio_bytes"] = audio_bytes
+      except Exception as e:
+        st.error(f"အသံဖိုင် ထုတ်ယူရာတွင် အမှားရှိပါသည်: {e}")
+
+# ရလဒ်နှင့် အသံဖိုင် ပြသခြင်း
+if "recap_result" in st.session_state:
+  st.success("အောင်မြင်သည်!")
+  st.markdown("#### 📄 ရလဒ် (Recap):")
+  st.info(st.session_state["recap_result"])
+
+  if "audio_bytes" in st.session_state:
+    st.markdown("#### 🎧 အသံဖြင့် နားထောင်ရန်:")
+    st.audio(st.session_state["audio_bytes"], format="audio/mp3")
+
+  # ဖိုင်အဖြစ် သိမ်းရန် Download Button
+  st.download_button(
+      label="📥 Recap ကို Text ဖိုင်ဖြင့် သိမ်းမည်",
+      data=st.session_state["recap_result"],
+      file_name="recap_result.txt",
+      mime="text/plain",
+      use_container_width=True,
+  )
