@@ -1,141 +1,94 @@
-import io
-import tempfile
-import edge_tts
-from google import genai
 import streamlit as st
+import asyncio
+import edge_tts
+import re
 
-# Page Configuration
-st.set_page_config(
-    page_title="Large Video Auto Recap & Voice", page_icon="🎥", layout="centered"
+st.set_page_config(page_title="Movie Recap Voice & SRT Generator", page_icon="🎙️")
+
+st.title("🎙️ Unlimited Voice & SRT Generator")
+st.write("Movie Recap Script များကို စာလုံးရေ အကန့်အသတ်မရှိ Audio (.mp3) နှင့် Subtitle (.srt) သို့ ပြောင်းလဲပေးသည့် Tool")
+
+# Script ထည့်ရန် Text Area
+script_text = st.text_area("Recap Script စာသားများကို ဒီမှာ Paste လုပ်ပါ:", height=250)
+
+# Voice ရွေးချယ်ရန်
+voice_option = st.selectbox(
+    "အသံအမျိုးအစား ရွေးပါ:",
+    [
+        ("မြန်မာ - Nilar (Female)", "my-MM-NilarNeural"),
+        ("မြန်မာ - Thiha (Male)", "my-MM-ThihaNeural"),
+        ("English - Christopher (Male)", "en-US-ChristopherNeural"),
+        ("English - Ava (Female)", "en-US-AvaNeural")
+    ],
+    format_func=lambda x: x[0]
 )
 
-st.markdown("### 🎥 Large Video to Myanmar Auto Recap & Voice")
+# Text မှ SRT Format သို့ ပြောင်းပေးသည့် Logic
+def text_to_srt(text):
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    srt_content = ""
+    start_time = 0  # Seconds
+    
+    for i, line in enumerate(lines, 1):
+        # စာကြောင်းအရှည်ပေါ် မူတည်ပြီး ကြာချိန် တွက်ချက်ခြင်း (၁ စာလုံးလျှင် ၀.၃ စက္ကန့်ခန့်)
+        duration = max(2, len(line) * 0.25)
+        end_time = start_time + duration
+        
+        def format_time(seconds):
+            hrs = int(seconds // 3600)
+            mins = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            msecs = int((seconds - int(seconds)) * 1000)
+            return f"{hrs:02d}:{mins:02d}:{secs:02d},{msecs:03d}"
+        
+        srt_content += f"{i}\n"
+        srt_content += f"{format_time(start_time)} --> {format_time(end_time)}\n"
+        srt_content += f"{line}\n\n"
+        
+        start_time = end_time
+        
+    return srt_content
 
-# Sidebar - API Key and Settings
-with st.sidebar:
-  st.markdown("### ⚙️ ဆက်တင်များ (Settings)")
-  api_key = st.text_input(
-      "Gemini API Key ထည့်ပါ",
-      type="password",
-      placeholder="AIzaSy...",
-      help="Google AI Studio မှ ရယူထားသော API Key ကို ထည့်ပါ။",
-  )
+# Edge-TTS Audio Generation Logic
+async def generate_audio_file(text, voice_code):
+    communicate = edge_tts.Communicate(text, voice_code)
+    await communicate.save("output_voice.mp3")
 
-  voice_choice = st.selectbox(
-      "အသံအမျိုးအစား (Voice Type)",
-      options=["my-MM-NilarNeural", "my-MM-ThuraNeural"],
-      format_func=lambda x: (
-          "👩 အမျိုးသမီးအသံ (Nilar)"
-          if x == "my-MM-NilarNeural"
-          else "👨 အမျိုးသားအသံ (Thura)"
-      ),
-  )
-
-  recap_style = st.selectbox(
-      "အကျဉ်းချုပ် ပုံစံ",
-      [
-          "အဓိကအချက်များ (Bullet points)",
-          "အတိုစား အကျဉ်းချုပ် (Short Summary)",
-          "အသေးစိတ် ရှင်းလင်းချက် (Detailed)",
-      ],
-  )
-
-
-# Edge-TTS Helper Function
-def get_edge_audio_bytes(text, voice_name):
-  async def _generate():
-    communicate = edge_tts.Communicate(text, voice_name)
-    audio_buffer = io.BytesIO()
-    async for chunk in communicate.stream():
-      if chunk["type"] == "audio":
-        audio_buffer.write(chunk["data"])
-    audio_buffer.seek(0)
-    return audio_buffer.read()
-
-  import asyncio
-
-  try:
-    return asyncio.run(_generate())
-  except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    return loop.run_until_complete(_generate())
-
-
-# Main UI - Video Uploader Form
-with st.form(key="large_video_form"):
-  uploaded_video = st.file_uploader(
-      "ဗီဒီယိုဖိုင် တင်ပါ (5GB အထိ ရပါသည်)",
-      type=["mp4", "mov", "avi", "mkv", "webm"],
-      max_upload_size=5000,
-  )
-  submit_btn = st.form_submit_button(
-      label="✨ ဗီဒီယိုကို မြန်မာလို Recap လုပ်မည်", use_container_width=True
-  )
-
-# Processing Logic
-if submit_btn:
-  if not api_key:
-    st.error(
-        "ကျေးဇူးပြု၍ ဘယ်ဘက် Sidebar တွင် Gemini API Key ကို ထည့်သွင်းပေးပါ။"
-    )
-  elif not uploaded_video:
-    st.warning("ကျေးဇူးပြု၍ ဗီဒီယိုဖိုင် တစ်ခု တင်ပေးပါ။")
-  else:
-    with st.spinner(
-        "ဗီဒီယိုဖိုင် ကြီးမားသဖြင့် AI ထံသို့ တင်ဆောင်နေသည်... (ခဏစောင့်ပါ)..."
-    ):
-      try:
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=".mp4"
-        ) as tmp_file:
-          tmp_file.write(uploaded_video.read())
-          tmp_file_path = tmp_file.name
-
-        client = genai.Client(api_key=api_key)
-
-        st.info(
-            "ဗီဒီယိုကို Google Files API သို့ ပေးပို့နေပါပြီ (ဖိုင်ဆိုဒ်ပေါ်မူတည်၍"
-            " အနည်းငယ် ကြာနိုင်ပါသည်)..."
-        )
-        video_file = client.files.upload(file=tmp_file_path)
-
-        prompt = (
-            f"ဤဗီဒီယိုပါ အကြောင်းအရာများကို အစအဆုံး လေ့လာပြီး မြန်မာဘာသာဖြင့်"
-            f" {recap_style} ပုံစံဖြင့် အကျဉ်းချုပ် ရေးသားပေးပါ။"
-        )
-
-        # မော်ဒယ်အမည်ကို Error ညွှန်ကြားချက်အတိုင်း ပြင်ဆင်ထားပါသည်
-        response = client.models.generate_content(
-            model="gemini-2.5", contents=[video_file, prompt]
-        )
-
-        recap_result = response.text
-        st.session_state["recap_result"] = recap_result
-
-        audio_bytes = get_edge_audio_bytes(recap_result, voice_choice)
-        st.session_state["audio_bytes"] = audio_bytes
-
-        client.files.delete(name=video_file.name)
-
-      except Exception as e:
-        st.error(f"အမှားအယွင်း ဖြစ်ပေါ်သည်: {e}")
-
-# ရလဒ်နှင့် အသံဖိုင် ပြသခြင်း
-if "recap_result" in st.session_state:
-  st.success("အောင်မြင်သည်!")
-
-  st.markdown("#### 📄 ဗီဒီယိုအကျဉ်းချုပ် (Myanmar Recap):")
-  st.write(st.session_state["recap_result"])
-
-  if "audio_bytes" in st.session_state:
-    st.markdown("#### 🎧 အသံဖြင့် နားထောင်ရန်:")
-    st.audio(st.session_state["audio_bytes"], format="audio/mp3")
-
-  st.download_button(
-      label="📥 အကျဉ်းချုပ်ကို Text ဖိုင်ဖြင့် သိမ်းမည်",
-      data=st.session_state["recap_result"],
-      file_name="video_recap.txt",
-      mime="text/plain",
-      use_container_width=True,
-  )
+# Main Action Button
+if st.button("🚀 Audio နှင့် SRT ထုတ်ယူမည်"):
+    if script_text.strip():
+        with st.spinner("Audio နှင့် Subtitle များ ဖန်တီးနေပါသည်။ ခဏစောင့်ပါ..."):
+            # 1. Voice (.mp3) ထုတ်ခြင်း
+            voice_code = voice_option[1]
+            asyncio.run(generate_audio_file(script_text, voice_code))
+            
+            # 2. Subtitle (.srt) ထုတ်ခြင်း
+            srt_data = text_to_srt(script_text)
+            
+            st.success("✨ ဖန်တီးမှု အောင်မြင်ပါသည်။")
+            
+            # Audio Player
+            audio_file = open("output_voice.mp3", "rb")
+            audio_bytes = audio_file.read()
+            st.audio(audio_bytes, format="audio/mp3")
+            
+            col1, col2 = st.columns(2)
+            
+            # Download Buttons
+            with col1:
+                st.download_button(
+                    label="📥 Download Audio (.mp3)",
+                    data=audio_bytes,
+                    file_name="recap_voice.mp3",
+                    mime="audio/mp3"
+                )
+            
+            with col2:
+                st.download_button(
+                    label="📥 Download Subtitle (.srt)",
+                    data=srt_data,
+                    file_name="recap_subtitles.srt",
+                    mime="text/plain"
+                )
+    else:
+        st.error("ကျေးဇူးပြု၍ Script စာသား ထည့်သွင်းပါ။")
